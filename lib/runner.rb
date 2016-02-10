@@ -1,11 +1,13 @@
 require 'pathname'
 require 'fileutils'
 require 'uri'
+require 'optparse'
+require 'ostruct'
 require_relative 'readmanga_downloader'
 
 module ReadMangaDownloader
   class Runner
-    def get_default_file
+    def self.get_default_file
       Pathname(Dir.pwd).each_entry do |file|
         if File.file?(file) && File.basename(file) == 'manga.txt'
           return file.to_path
@@ -14,38 +16,63 @@ module ReadMangaDownloader
       raise 'Task description file was not found in current directory'
     end
 
-    def read_params_file(source_file)
+    def self.read_params_file(source_file)
       File.open(source_file, 'r') do |io|
         lines = io.readlines.compact.select { |line| !line.empty? }.map { |line| line.strip }
         [lines[0], lines[1]]
       end
     end
 
-    def run(args)
+    def self.parse_options(args)
+      options = OpenStruct.new
+      options.manga_root = 'manga_root'
+      opts_parser = OptionParser.new do |opts|
+        opts.banner = 'Readmanga Downloader. Downloads manga chapters as images from readmanga.me'
+        opts.define_head 'Usage: readmanga [options]'
+        opts.separator ''
+        opts.separator 'Examples:'
+        opts.separator 'Calling without options cause looking for file \'manga.txt\' where ' +
+                           ' manga page url and filter (optional) are specified'
+        opts.separator '  readmanga'
+        opts.separator '  readmanga -url http://readmanga.me/puella_magi_madoka_magica___wraith_arc'
+        opts.separator '  readmanga -f 3-6,8'
+        opts.separator '  readmanga -url http://readmanga.me/puella_magi_madoka_magica___wraith_arc -f 3-'
+        opts.separator 'Specific options'
 
-      source_url, source_file, filter_str = nil
-      if args.empty?
-        source = get_default_file
-      elsif args.length == 1
-        source = args[0]
-      else
-        source = args[0]
-        filter_str = args[1]
-      end
-      begin
-        if %w(http https).include? URI.parse(source).scheme
-          source_url = source
-        else
-          source_file = source
+        opts.on('-t', '--task FILENAME', 'Specifies file with manga url and filter string (default is manga.txt)') do |file|
+          url, filter = read_params_file file
+          options.url = url
+          options.filter = filter
+          options.loaded_from_file = true
         end
-      rescue URI::InvalidURIError
-        source_file = source
-      end
-      if source_file
-        source_url, filter_str = read_params_file(source_file)
-      end
 
-      repo_root = File.join(Dir.pwd, 'manga_root')
+        opts.on('-u', '--url URL', 'Specifies manga main page url on readmanga.me') do |url|
+          options.url = url
+        end
+        opts.on('-f', '--filter FILTER_STRING', 'Chapter filter string') do |filter|
+          options.filter = filter
+        end
+        opts.on('-d', '--dest DIRECTORY', 'Manga titles root directory',
+                "Titles will be downloaded into this directory. Default is #{options.manga_root}") do |dir|
+          options.manga_root = dir
+        end
+      end
+      opts_parser.parse! args
+      if options.url == nil
+        unless options.loaded_from_file
+          url, filter = read_params_file 'manga.txt'
+          options.url = url
+          options.filter = filter if options.filter == nil
+        end
+      end
+      options
+    end
+
+    def run(args)
+      options = ReadMangaDownloader::Runner.parse_options args
+      source_url = options.url
+      filter_str = options.filter
+      repo_root = options.manga_root
       FileUtils.mkpath repo_root unless Dir.exist? repo_root
 
       options = {
