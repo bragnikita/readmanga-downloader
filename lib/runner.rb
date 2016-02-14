@@ -26,6 +26,7 @@ module ReadMangaDownloader
     def self.parse_options(args)
       options = OpenStruct.new
       options.manga_root = 'manga_root'
+      options.test_mode = false
       opts_parser = OptionParser.new do |opts|
         opts.banner = 'Readmanga Downloader. Downloads manga chapters as images from readmanga.me'
         opts.define_head 'Usage: readmanga [options]'
@@ -56,6 +57,9 @@ module ReadMangaDownloader
                 "Titles will be downloaded into this directory. Default is #{options.manga_root}") do |dir|
           options.manga_root = dir
         end
+        opts.on('-t', '--test', 'Only print provided parameters') do
+          options.test_mode = true
+        end
       end
       opts_parser.parse! args
       if options.url == nil
@@ -75,16 +79,19 @@ module ReadMangaDownloader
       repo_root = options.manga_root
       FileUtils.mkpath repo_root unless Dir.exist? repo_root
 
-      options = {
+      options_hash = {
           :base_url => source_url,
           :target_dir => repo_root,
           :filter => filter_str,
       }
-      p "Manga page url: #{options[:base_url]}"
-      p "Manga repository root: #{options[:target_dir]}"
-      p "Chapters filter: #{options[:filter]}"
-# download_task = ReadMangaDownloader::DownloadTask.new(nil, options)
-#download_task.start
+      if options.test_mode
+        p "Manga page url: #{options_hash[:base_url]}"
+        p "Manga repository root: #{options_hash[:target_dir]}"
+        p "Chapters filter: #{options_hash[:filter]}"
+      else
+        download_task = ReadMangaDownloader::DownloadTask.new(nil, options_hash)
+        download_task.start
+      end
     end
   end
 end
