@@ -1,3 +1,5 @@
 /manga.txt
 /*.gem
 /manga_root/**
+/.idea
+*.iml
